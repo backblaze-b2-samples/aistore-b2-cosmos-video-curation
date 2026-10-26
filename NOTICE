@@ -1,0 +1,66 @@
+aistore-b2-cosmos-video-curation
+Copyright (c) 2026 Backblaze, Inc.
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This project is not affiliated with, sponsored by, or endorsed by NVIDIA Corporation.
+NVIDIA, NeMo, Cosmos, Isaac, GR00T, and AIStore are trademarks of their respective owners
+and are used here only to identify the software, models, and data this sample works with.
+
+-------------------------------------------------------------------------------
+Third-party software, models, and data
+-------------------------------------------------------------------------------
+
+Nothing below is vendored or redistributed by this repository unless stated.
+
+1. AIStore (https://github.com/NVIDIA/aistore) - MIT License
+   Used as a container image (aistorage/cluster-minimal) and Python SDK (aistore).
+   deploy/docker-compose.yml is adapted from AIStore's
+   deploy/prod/docker/compose/docker-compose.yml, which carries this notice:
+
+     MIT License
+
+     Copyright (c) 2017 NVIDIA Corporation
+
+     Permission is hereby granted, free of charge, to any person obtaining a copy
+     of this software and associated documentation files (the "Software"), to deal
+     in the Software without restriction, including without limitation the rights
+     to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+     copies of the Software, and to permit persons to whom the Software is
+     furnished to do so, subject to the following conditions:
+
+     The above copyright notice and this permission notice shall be included in all
+     copies or substantial portions of the Software.
+
+     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+     IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+     FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+     AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+     SOFTWARE.
+
+2. NVIDIA NeMo Curator (https://github.com/NVIDIA-NeMo/Curator) - Apache License 2.0
+   The `nemo-curator` package is installed by `make setup-curator`; the tutorial script
+   tutorials/video/getting-started/video_split_clip_example.py is fetched by `make setup`
+   into .cache/ (git-ignored) and checksum-verified. Neither is redistributed.
+
+3. Cosmos-Embed1 model weights (https://huggingface.co/nvidia/Cosmos-Embed1-224p)
+   Downloaded by NeMo Curator on first use; NVIDIA Open Model License
+   (https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license).
+   Never redistributed here.
+
+4. Qwen2.5-VL-7B-Instruct model weights (https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct)
+   Downloaded only with --with-captions; Apache License 2.0. Never redistributed here.
+
+5. PhysicalAI-Robotics-GR00T-X-Embodiment-Sim
+   (https://huggingface.co/datasets/nvidia/PhysicalAI-Robotics-GR00T-X-Embodiment-Sim)
+   Creative Commons Attribution 4.0 International (CC BY 4.0).
+   Attribution: NVIDIA Corporation. The default seed subset (pinned to revision
+   ea7ac0b68f87da62f1e726771bba0fe74300802f) is copied into your own bucket; not
+   redistributed here. Clips, embeddings, and metadata produced from it are adaptations;
+   if you share them, keep this attribution and indicate that changes were made.
+
+6. Python dependencies (aistore, boto3, huggingface_hub, nemo-curator, s3fs, pytest, ruff,
+   and transitive packages) are installed from PyPI under their own licenses; see uv.lock
+   and deploy/curator/uv.lock.
