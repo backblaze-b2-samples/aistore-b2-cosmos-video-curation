@@ -21,7 +21,7 @@ import subprocess
 import sys
 import textwrap
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -38,7 +38,7 @@ pytestmark = pytest.mark.integration
 
 ROOT = Path(__file__).resolve().parents[2]
 IT_AIS_PORT = 51280  # the disposable cluster from `make test-integration`, never `make up`'s
-RUN = f"it/{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{secrets.token_hex(4)}/"
+RUN = f"it/{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{secrets.token_hex(4)}/"
 RAW = {f"{RUN}raw/robot/episode_{i:06d}.mp4": os.urandom(256 * 1024 + i) for i in range(3)}
 RAW_BYTES = sum(len(v) for v in RAW.values())
 

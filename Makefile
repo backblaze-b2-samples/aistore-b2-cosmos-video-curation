@@ -21,7 +21,7 @@ CURATOR_SCRIPT_URL := https://raw.githubusercontent.com/NVIDIA-NeMo/Curator/$(CU
 CURATOR_SCRIPT_SHA := e6fec820b74911cd3b9a0eadc88be1c01b47dc06b49e90683a88fd584570307d
 CURATOR_SCRIPT     := .cache/curator/video_split_clip_example.py
 
-.PHONY: help setup setup-curator up attach down seed run bench verify test test-integration check lint fmt
+.PHONY: help setup setup-curator up attach down seed run bench verify test test-integration check lint fmt audit
 
 help: ## List targets
 	@awk 'BEGIN { FS = ":.*## " } /^[a-zA-Z_-]+:.*## / { printf "  %-17s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -39,6 +39,10 @@ setup-curator: setup ## GPU host (Linux x86_64, CUDA 12): NeMo Curator in .venv-
 	@test "$$(uname -s)-$$(uname -m)" = Linux-x86_64 || { echo "Curator requires Linux x86_64 + CUDA 12" >&2; exit 1; }
 	UV_PROJECT_ENVIRONMENT=$(CURDIR)/.venv-curator uv sync --locked --project deploy/curator --python 3.12
 	.venv-curator/bin/python scripts/patch_curator.py
+
+audit: ## Audit both locked environments against published advisories (network required)
+	uv export --locked --all-groups --no-emit-project --format requirements-txt | uvx --from pip-audit==2.10.1 pip-audit --disable-pip --require-hashes -r /dev/stdin
+	uv export --locked --project deploy/curator --no-emit-project --format requirements-txt | uvx --from pip-audit==2.10.1 pip-audit --disable-pip --require-hashes -r /dev/stdin
 
 up: ## Start AIS on 127.0.0.1 and attach s3://$B2_BUCKET
 	$(LOAD_ENV) $(COMPOSE) up -d --wait

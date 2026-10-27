@@ -52,12 +52,18 @@ Nothing below is vendored or redistributed by this repository unless stated.
    installed copy: remote FSPath values are converted to strings when deriving file-group IDs.
 
 3. Cosmos-Embed1 model weights (https://huggingface.co/nvidia/Cosmos-Embed1-224p)
-   Downloaded by NeMo Curator on first use; NVIDIA Open Model License
+   Downloaded by scripts/prepare_model.py on first use at revision
+   787e0b996f5260a71ad474a283c90539a2e12986; NVIDIA Open Model License
    (https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license).
-   Never redistributed here.
+   Never redistributed here. Its model code retains its original license headers.
+   scripts/prepare_model.py applies marked, checksum-guarded modifications for
+   Transformers 5 model initialization and tensor helper compatibility.
 
-4. Qwen2.5-VL-7B-Instruct model weights (https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct)
-   Downloaded only with --with-captions; Apache License 2.0. Never redistributed here.
+4. Hugging Face Transformers (https://github.com/huggingface/transformers)
+   deploy/curator/compat_transformers5.py adapts the pruning and attention-mask
+   tensor helpers from Transformers 4.57.6 (pytorch_utils.py and modeling_utils.py).
+   Copyright The HuggingFace Team. Apache License 2.0; see LICENSE.
+   The adaptation preserves tensor behavior and adds explicit dimension validation.
 
 5. PhysicalAI-Robotics-GR00T-X-Embodiment-Sim
    (https://huggingface.co/datasets/nvidia/PhysicalAI-Robotics-GR00T-X-Embodiment-Sim)
