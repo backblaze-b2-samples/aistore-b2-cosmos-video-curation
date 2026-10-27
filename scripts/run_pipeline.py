@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 import re
 import shlex
 import subprocess
@@ -201,7 +202,15 @@ def main(argv: list[str] | None = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=False)
 
     gets_before = _backend_gets(cfg)
-    rc = run_curator(cmd, ais_s3_env(cfg))
+    curator_env = ais_s3_env(cfg)
+    # Ray's uv hook detects the wrapper's ancestor process and selects its CPU environment.
+    # Workers must instead inherit the separately installed Curator GPU interpreter.
+    curator_env["RAY_ENABLE_UV_RUN_RUNTIME_ENV"] = "0"
+    curator_env["VIRTUAL_ENV"] = str(CURATOR_PYTHON.parent.parent)
+    curator_env["PATH"] = (
+        str(CURATOR_PYTHON.parent) + os.pathsep + curator_env.get("PATH", os.defpath)
+    )
+    rc = run_curator(cmd, curator_env)
     if rc != 0:
         print(f"Curator exited with {rc}; local output kept in {out_dir}", file=sys.stderr)
         return rc

@@ -43,7 +43,13 @@ Nothing below is vendored or redistributed by this repository unless stated.
 2. NVIDIA NeMo Curator (https://github.com/NVIDIA-NeMo/Curator) - Apache License 2.0
    The `nemo-curator` package is installed by `make setup-curator`; the tutorial script
    tutorials/video/getting-started/video_split_clip_example.py is fetched by `make setup`
-   into .cache/ (git-ignored) and checksum-verified. Neither is redistributed.
+   into .cache/ (git-ignored) and checksum-verified. Neither is redistributed in full.
+   tests/fixtures/curator_file_group.py.txt reproduces the unmodified
+   nemo_curator/tasks/file_group.py from the nemo-curator 1.3.0 wheel
+   (https://pypi.org/project/nemo-curator/1.3.0/) for offline compatibility tests.
+   It retains NVIDIA's copyright and Apache-2.0 license header.
+   scripts/patch_curator.py applies a marked, checksum-guarded modification to the
+   installed copy: remote FSPath values are converted to strings when deriving file-group IDs.
 
 3. Cosmos-Embed1 model weights (https://huggingface.co/nvidia/Cosmos-Embed1-224p)
    Downloaded by NeMo Curator on first use; NVIDIA Open Model License
