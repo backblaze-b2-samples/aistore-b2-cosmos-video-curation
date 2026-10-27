@@ -6,10 +6,11 @@ from __future__ import annotations
 
 import hashlib
 import sys
+import tempfile
 from importlib.metadata import PackageNotFoundError, distribution
 from pathlib import Path
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 SOURCE_SHA256 = "190224b7ff697f3c6dbfe497f2fbbb4f59d430734fe34af6afb136a6ba275f96"
 OLD = b"        return get_deterministic_hash(sorted(self.data))\n"
 NEW = (
@@ -26,7 +27,16 @@ def patch_file(path: Path) -> bool:
         raise ValueError(f"unexpected Curator source: {path}; refusing to patch")
     if original != source:
         return False
-    path.write_bytes(source.replace(OLD, NEW))
+    with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            stream.write(source.replace(OLD, NEW))
+            stream.flush()
+            temporary.chmod(path.stat().st_mode & 0o777)
+            # Replace the file instead of modifying uv's shared wheel-cache hard link.
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
     return True
 
 

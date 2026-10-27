@@ -58,9 +58,9 @@ flowchart LR
   O -->|publish last| M[_SUCCESS.json]
 ```
 
-AIS caches remote inputs and writes uploads through to B2. The wrapper (`scripts/run_pipeline.py`) launches the pinned Curator tutorial: botocore and s3fs pick up `AWS_ENDPOINT_URL`, so every Curator read goes through AIS. Curator 1.3.0 writes only to local paths, so output lands in `work/<run-id>/` and is then uploaded through AIS.
+AIS caches remote inputs and writes uploads through to B2. The wrapper (`scripts/run_pipeline.py`) launches the pinned Curator tutorial: botocore and s3fs pick up `AWS_ENDPOINT_URL`, so every Curator read goes through AIS. Curator 1.4.0 writes only to local paths, so output lands in `work/<run-id>/` and is then uploaded through AIS.
 
-`make setup-curator` applies a checksum-guarded compatibility fix to Curator 1.3.0: remote file-group IDs normalize `FSPath` values to strings before hashing. The original path objects remain intact for reads. Setup accepts only the known upstream file or its already patched form and fails on unexpected source. Ray workers use `.venv-curator`; the launcher's automatic uv environment propagation is disabled for the Curator subprocess.
+`make setup-curator` applies a checksum-guarded compatibility fix to Curator 1.4.0: remote file-group IDs normalize `FSPath` values to strings before hashing. The original path objects remain intact for reads. Setup accepts only the known upstream file or its already patched form and fails on unexpected source. Ray workers use `.venv-curator`; the launcher's automatic uv environment propagation is disabled for the Curator subprocess.
 
 The GPU environment includes the video stages needed for clips and embeddings, without the optional vLLM captioning stack. Before Curator starts, the entrypoint verifies the pinned tutorial and omits its unused captioning imports. It downloads Cosmos-Embed1 at a fixed revision, verifies the SHA-256 of its code, configuration and safetensors weights, and applies a checksum-guarded Transformers 5 compatibility adaptation. This retains the original attention-mask math and restores the model's normalization constants after weight loading. Cached artifacts are verified on subsequent runs; unexpected changes stop the run before model code executes.
 
@@ -84,7 +84,7 @@ Seeded inputs and curated outputs are published as a prefix with a `_SUCCESS.jso
   "schema_version": 1,
   "status": "complete",
   "files": {"clips/example.mp4": {"size": 123, "sha256": "<64 hex characters>"}},
-  "provenance": {"curator_version": "1.3.0", "input_manifest_sha256": "<64 hex characters>"}
+  "provenance": {"curator_version": "1.4.0", "input_manifest_sha256": "<64 hex characters>"}
 }
 ```
 
@@ -184,8 +184,8 @@ Integration tests run against real B2 through a disposable AIS cluster under its
 
 | Component | Pin |
 |---|---|
-| NeMo Curator | `1.3.0` |
-| Curator tutorial script | commit `6b956ce8965820de1b638fedf6de0cbcf0cc46ba`, SHA-256 verified by `make setup` |
+| NeMo Curator | `1.4.0` |
+| Curator tutorial script | commit `10fba1ea785863872ae6983b580ec6813e72cc79`, SHA-256 verified by `make setup` |
 | GPU Python environment | `deploy/curator/uv.lock`, Linux x86_64 / Python 3.12 |
 | Transformers | `5.21.0` in the GPU lock; checksum-guarded Cosmos-Embed1 compatibility adaptation |
 | PyTorch / torchvision | `2.13.0` / `0.28.0`; CUDA 13 runtime |

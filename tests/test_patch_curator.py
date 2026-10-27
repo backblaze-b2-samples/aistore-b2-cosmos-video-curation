@@ -4,13 +4,34 @@
 
 import ast
 import hashlib
+import re
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
+import curator_entrypoint
 import patch_curator
 import pytest
 
 UPSTREAM = Path(__file__).parent / "fixtures" / "curator_file_group.py.txt"
+
+
+def test_runtime_lock_tutorial_and_patch_versions_stay_aligned():
+    root = Path(__file__).resolve().parents[1]
+    manifest = tomllib.loads((root / "deploy/curator/pyproject.toml").read_text())
+    requirement = next(
+        dep for dep in manifest["project"]["dependencies"] if dep.startswith("nemo-curator[")
+    )
+    assert requirement.split("==", 1)[1] == patch_curator.VERSION
+    lock = tomllib.loads((root / "deploy/curator/uv.lock").read_text())
+    assert next(p["version"] for p in lock["package"] if p["name"] == "nemo-curator") == (
+        patch_curator.VERSION
+    )
+    makefile = (root / "Makefile").read_text()
+    version = re.search(r"^CURATOR_VERSION\s*:=\s*(\S+)", makefile, re.M)
+    checksum = re.search(r"^CURATOR_SCRIPT_SHA\s*:=\s*(\S+)", makefile, re.M)
+    assert version and version[1] == patch_curator.VERSION
+    assert checksum and checksum[1] == curator_entrypoint.SCRIPT_SHA256
 
 
 @pytest.fixture
@@ -66,6 +87,15 @@ def test_patch_is_idempotent(source):
     assert source.read_bytes() == patched
 
 
+def test_patch_does_not_modify_a_shared_wheel_cache_hard_link(source, tmp_path):
+    cached = tmp_path / "cached_file_group.py"
+    cached.hardlink_to(source)
+    original = cached.read_bytes()
+    assert patch_curator.patch_file(source)
+    assert source.read_bytes() != original
+    assert cached.read_bytes() == original
+
+
 @pytest.mark.parametrize("already_patched", [False, True])
 def test_unknown_source_is_rejected_without_changes(source, already_patched):
     if already_patched:
@@ -78,13 +108,13 @@ def test_unknown_source_is_rejected_without_changes(source, already_patched):
 
 
 def test_setup_checks_distribution_version_before_patching(monkeypatch, capsys):
-    monkeypatch.setattr(patch_curator, "distribution", lambda _: SimpleNamespace(version="1.4.0"))
+    monkeypatch.setattr(patch_curator, "distribution", lambda _: SimpleNamespace(version="1.5.0"))
     assert patch_curator.main() == 1
-    assert "expected nemo-curator 1.3.0; found 1.4.0" in capsys.readouterr().err
+    assert "expected nemo-curator 1.4.0; found 1.5.0" in capsys.readouterr().err
 
 
 def test_setup_patches_installed_distribution(monkeypatch, source, capsys):
-    dist = SimpleNamespace(version="1.3.0", locate_file=lambda _: source)
+    dist = SimpleNamespace(version="1.4.0", locate_file=lambda _: source)
     monkeypatch.setattr(patch_curator, "distribution", lambda _: dist)
     assert patch_curator.main() == 0
     assert "fix: applied" in capsys.readouterr().out

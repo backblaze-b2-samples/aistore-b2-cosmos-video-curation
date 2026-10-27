@@ -5,7 +5,7 @@
 Unlimited runs prefetch the input prefix into AIS first; bounded runs and --skip-prefetch
 read on demand through the cache. Curator reads `s3://` via
 AWS_ENDPOINT_URL; the B2 GETs AIS made during that stage are reported on stderr. Curator
-1.3.0 writes clips locally, so output is uploaded through AIS to
+1.4.0 writes clips locally, so output is uploaded through AIS to
 s3://$B2_BUCKET/<output-prefix>/<run-id>/.
 
 Unrecognized arguments are forwarded to Curator verbatim, e.g. `--motion-filter enable`.
@@ -29,6 +29,7 @@ from uuid import uuid4
 
 import requests
 from botocore.exceptions import ClientError, EndpointConnectionError
+from patch_curator import VERSION as CURATOR_VERSION
 from prepare_model import MODEL_REVISION
 
 from aistore_b2_curation.artifacts import (
@@ -139,7 +140,7 @@ def pick_encoder(requested: str, gpu_names: list[str]) -> str:
 def build_command(
     cfg: Config, args: argparse.Namespace, encoder: str, passthrough: list[str]
 ) -> list[str]:
-    """Curator video_split_clip_example.py invocation (flags verified against v1.3.0)."""
+    """Curator video_split_clip_example.py invocation (flags verified against v1.4.0)."""
     cmd = [
         str(CURATOR_PYTHON),
         str(CURATOR_ENTRYPOINT),
@@ -237,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
             dest,
             publish=True,
             provenance={
-                "curator_version": "1.3.0",
+                "curator_version": CURATOR_VERSION,
                 "cosmos_embed1_revision": MODEL_REVISION,
                 "input_prefix": args.input_prefix,
                 # Pins the exact input publication; None for an unmanifested prefix.
