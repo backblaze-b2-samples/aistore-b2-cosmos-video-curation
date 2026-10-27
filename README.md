@@ -98,6 +98,7 @@ make verify PREFIX=curated/<run-id> ARGS="--direct"  # B2's durable copy
 ```
 
 Verification streams every listed object, checks its size and SHA-256, then rereads the record to detect a concurrent republish.
+It reports files verified and bytes read to stderr at startup, about every five seconds as data arrives, and on completion. The final `verified N files` line on stdout appears only after all checks pass. Progress updates pause while waiting on network reads.
 It prints its file count only after completion; large publications can take several minutes without intermediate output.
 
 ### Scope
