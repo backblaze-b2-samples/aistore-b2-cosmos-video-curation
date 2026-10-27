@@ -137,8 +137,8 @@ def evict(cfg: Config, keys: list[str]) -> None:
     if not keys:
         return
     client = _ais_client(cfg)
-    # List only the keys' shared prefix, not the whole bucket.
-    cached = cached_keys(cfg, os.path.commonprefix(keys)) & set(keys)
+    # S3 keys use character prefixes, including partial filename matches.
+    cached = cached_keys(cfg, os.path.commonprefix(keys)) & set(keys)  # noqa: RUF071
     if cached:
         job_id = (
             client.bucket(cfg.b2_bucket, provider="aws").objects(obj_names=sorted(cached)).evict()
