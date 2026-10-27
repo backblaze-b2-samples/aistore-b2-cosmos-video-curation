@@ -58,7 +58,7 @@ def test_pick_encoder(requested, gpus, expected):
 def test_build_command_defaults(cfg):
     args, extra = run_pipeline.parse_args(["--run-id", "r1"])
     cmd = run_pipeline.build_command(cfg, args, "h264_nvenc", extra)
-    assert cmd[:2] == [str(run_pipeline.CURATOR_PYTHON), str(run_pipeline.CURATOR_SCRIPT)]
+    assert cmd[:2] == [str(run_pipeline.CURATOR_PYTHON), str(run_pipeline.CURATOR_ENTRYPOINT)]
     flags = dict(zip(cmd[2::2], cmd[3::2], strict=True))
     assert flags["--video-dir"] == "s3://my-video-corpus/raw"
     assert flags["--output-path"].endswith("work/r1")
@@ -73,7 +73,6 @@ def test_build_command_options_and_passthrough(cfg):
             "raw/",
             "--video-limit",
             "3",
-            "--with-captions",
             "--motion-filter",
             "enable",
         ]
@@ -81,18 +80,18 @@ def test_build_command_options_and_passthrough(cfg):
     cmd = run_pipeline.build_command(cfg, args, "libvpx-vp9", extra)
     assert "s3://my-video-corpus/raw" in cmd  # trailing slash normalized
     assert cmd[cmd.index("--video-limit") + 1] == "3"
-    assert cmd[cmd.index("--captioning-algorithm") + 1] == "qwen2.5"
+    assert "--generate-captions" not in cmd
     assert cmd[-2:] == ["--motion-filter", "enable"]
 
 
 def test_command_is_accepted_by_pinned_curator_parser(cfg):
     parser = curator_argparser()
-    args, extra = run_pipeline.parse_args(["--with-captions", "--video-limit", "2"])
+    args, extra = run_pipeline.parse_args(["--video-limit", "2"])
     cmd = run_pipeline.build_command(cfg, args, "libvpx-vp9", extra)
     parsed = parser.parse_args(cmd[2:])
     assert parsed.video_dir == "s3://my-video-corpus/raw"
     assert parsed.transcode_encoder == "libvpx-vp9"
-    assert parsed.generate_embeddings and parsed.generate_captions
+    assert parsed.generate_embeddings and not parsed.generate_captions
     assert parsed.video_limit == 2
 
 

@@ -21,7 +21,3 @@ updates:
     directory: /deploy/curator
     schedule:
       interval: weekly
-    ignore:
-      # Cosmos-Embed1's custom model code requires Transformers 4 APIs.
-      - dependency-name: transformers
-        update-types: ["version-update:semver-major"]

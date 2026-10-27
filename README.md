@@ -4,12 +4,12 @@ Read raw videos from Backblaze B2 through an AIStore (AIS) cache, split them int
 
 ## Prerequisites
 
-Steps marked **any machine** run on a CPU-only Linux or macOS host. Steps marked **GPU host** need the GPU items below.
+Steps marked **any machine** run on a CPU-only Linux or macOS host with Python 3.11 or newer. Steps marked **GPU host** need the GPU items below.
 
 - [ ] A B2 bucket and an application key restricted to it with `listBuckets`, `listFiles`, `readFiles`, `writeFiles`
 - [ ] Docker with Compose v2, `curl`, and `shasum`
 - [ ] [uv](https://docs.astral.sh/uv/)
-- [ ] **GPU host:** Linux x86_64, an NVIDIA GPU, and a CUDA 12-compatible driver and build toolkit. See [NVIDIA's video curation guide](https://docs.nvidia.com/nemo/curator/v26.07/get-started/video) for GPU sizing; embedding and captioning models have different VRAM needs.
+- [ ] **GPU host:** Linux x86_64, an NVIDIA GPU, a CUDA 13-compatible driver (580.65.06 or newer), and the CUDA 12 toolkit for Curator's native video extensions. The locked PyTorch wheel supplies its CUDA 13 runtime. See [NVIDIA's video curation guide](https://docs.nvidia.com/nemo/curator/v26.07/get-started/video) for GPU sizing.
 - [ ] **GPU host:** system FFmpeg and ffprobe 8.0+ with the selected encoder and its software decoder: `h264_nvenc` / `h264` for NVENC, or `libvpx-vp9` / `vp9` for CPU VP9. Check with `ffmpeg -version`, `ffprobe -version`, `ffmpeg -hide_banner -encoders`, and `ffmpeg -hide_banner -decoders`.
 - [ ] **GPU host, NVENC:** NVIDIA's video-encoding runtime library (`libnvidia-encode.so.1`) matching the installed driver. FFmpeg's encoder listing alone does not confirm runtime availability; `make run` exercises the encoder before accessing storage.
 
@@ -62,6 +62,8 @@ AIS caches remote inputs and writes uploads through to B2. The wrapper (`scripts
 
 `make setup-curator` applies a checksum-guarded compatibility fix to Curator 1.3.0: remote file-group IDs normalize `FSPath` values to strings before hashing. The original path objects remain intact for reads. Setup accepts only the known upstream file or its already patched form and fails on unexpected source. Ray workers use `.venv-curator`; the launcher's automatic uv environment propagation is disabled for the Curator subprocess.
 
+The GPU environment includes the video stages needed for clips and embeddings, without the optional vLLM captioning stack. Before Curator starts, the entrypoint verifies the pinned tutorial and omits its unused captioning imports. It downloads Cosmos-Embed1 at a fixed revision, verifies the SHA-256 of its code, configuration and safetensors weights, and applies a checksum-guarded Transformers 5 compatibility adaptation. This retains the original attention-mask math and restores the model's normalization constants after weight loading. Cached artifacts are verified on subsequent runs; unexpected changes stop the run before model code executes.
+
 **Media preflight.** Before any storage access, the wrapper checks FFmpeg versions and codecs and performs a small in-memory encode with the selected encoder, which catches missing runtime NVENC support. `--encoder auto` selects NVENC, or CPU VP9 on recognized GPUs without NVENC (A100, H100); pass `--encoder libvpx-vp9` when hardware encoding is unavailable. `--dry-run` skips preflight and storage work.
 
 **Prefetch.** Full runs prefetch the input prefix into AIS first, so Curator reads only cached data. A failed or timed-out prefetch stops the run before Curator starts; pass `--skip-prefetch` to read cold through AIS instead. Runs with `--video-limit` skip prefetch and read their selected videos on demand.
@@ -100,10 +102,10 @@ It prints its file count only after completion; large publications can take seve
 
 ### Scope
 
-- Output is clips and embeddings, with optional captions. A downstream Cosmos trainer may need filtering, deduplication, splits, tokenization, or format conversion.
+- Output is clips and embeddings. Captioning is not included. A downstream Cosmos trainer may need filtering, deduplication, splits, tokenization, or format conversion.
 - The sample measures B2 traffic, not curation speed or model quality.
 - The Compose stack is a single-host demo: one proxy, one target, no authentication, ports bound to `127.0.0.1`. See [docs/operations.md](docs/operations.md) for remote deployments.
-- The GPU lock pins Python packages only, not drivers, CUDA, model weights, or model-managed environments.
+- The GPU lock pins Python packages and the PyTorch CUDA runtime. Host drivers and the build toolkit are installed separately. Cosmos-Embed1 code and weights are pinned and checksum-verified by the entrypoint.
 
 ## Configuration
 
@@ -120,14 +122,14 @@ It prints its file count only after completion; large publications can take seve
 
 `.env` is shell-sourced for storage operations, so quote values containing spaces or `#`. Unit tests never source it.
 
-`make run` options: `--input-prefix` (default `raw`), `--output-prefix` (default `curated`), `--run-id`, `--work-dir`, `--model-dir`, `--clip-seconds`, `--video-limit`, `--encoder`, `--with-captions`, `--skip-prefetch`, `--dry-run`. Other flags are forwarded to Curator, except input, output, model path, encoder, and clip-duration flags, which must use the wrapper's options. Default run IDs contain a timestamp and random suffix; an explicit `--run-id` must be a single identifier, and an existing `work/<run-id>/` is refused.
+`make run` options: `--input-prefix` (default `raw`), `--output-prefix` (default `curated`), `--run-id`, `--work-dir`, `--model-dir`, `--clip-seconds`, `--video-limit`, `--encoder`, `--skip-prefetch`, `--dry-run`. Other flags are forwarded to Curator, except input, output, model path, encoder, clip duration, embedding model, and captioning flags. The sample uses the verified Cosmos-Embed1 224p model. Default run IDs contain a timestamp and random suffix; an explicit `--run-id` must be a single identifier, and an existing `work/<run-id>/` is refused.
 
 To curate your own videos, seed them under a new immutable prefix per dataset revision. AIS keeps serving cached objects for a prefix, so overwriting inputs in place can return old data.
 
 ```bash
 set -a; . ./.env; set +a
 uv run --locked python scripts/seed_b2.py --local-dir ./my_videos --prefix raw/revision-001
-make run ARGS="--input-prefix raw/revision-001 --video-limit 5 --with-captions"
+make run ARGS="--input-prefix raw/revision-001 --video-limit 5"
 ```
 
 Seeding writes directly to B2. Curator reads every video under the selected prefix; the seed manifest does not filter its input. When the prefix has a `_SUCCESS.json`, `run_pipeline.py` requires it to be complete and to list exactly the objects present (by key and size), so an interrupted seed or leftovers from an earlier one are refused. A prefix with no manifest is curated as-is.
@@ -143,7 +145,8 @@ make bench ARGS="--prefix raw/ --limit 50 --workers 16"
 ## Tests
 
 ```bash
-make check              # lint + offline unit tests (what CI runs, Python 3.10 and 3.12)
+make check              # lint + offline unit tests (what CI runs, Python 3.11 and 3.12)
+make audit              # scan both locked environments; requires network access
 make test-integration   # real B2, opt-in
 ```
 
@@ -184,13 +187,14 @@ Integration tests run against real B2 through a disposable AIS cluster under its
 | NeMo Curator | `1.3.0` |
 | Curator tutorial script | commit `6b956ce8965820de1b638fedf6de0cbcf0cc46ba`, SHA-256 verified by `make setup` |
 | GPU Python environment | `deploy/curator/uv.lock`, Linux x86_64 / Python 3.12 |
-| Transformers | `4.57.6` in the GPU lock; constrained to `>=4.57.6,<5` for Cosmos-Embed1's custom model code |
+| Transformers | `5.21.0` in the GPU lock; checksum-guarded Cosmos-Embed1 compatibility adaptation |
+| PyTorch / torchvision | `2.13.0` / `0.28.0`; CUDA 13 runtime |
 | CPU Python environment | `uv.lock` |
 | AIStore image | `aistorage/cluster-minimal:v5.1`, pinned by digest in `deploy/docker-compose.yml` |
 | AIStore Python SDK | `aistore==2.0.0`, moves with the image |
 | Seed dataset | `nvidia/PhysicalAI-Robotics-GR00T-X-Embodiment-Sim` @ `ea7ac0b68f87da62f1e726771bba0fe74300802f` |
 
-Model weights download on first use; record their revisions and hashes for a reproducible experiment.
+Cosmos-Embed1 downloads on first use at revision `787e0b996f5260a71ad474a283c90539a2e12986`. The entrypoint verifies its artifact checksums and the output manifest records the model revision. Record the driver and build toolkit versions for a reproducible experiment.
 
 ## Licenses and disclaimer
 
@@ -199,7 +203,7 @@ Model weights download on first use; record their revisions and hashes for a rep
 | Sample code | Apache-2.0 ([LICENSE](LICENSE)) | yes |
 | `deploy/docker-compose.yml` | Adapted from AIStore (MIT); notice in [NOTICE](NOTICE) | yes |
 | NeMo Curator and its tutorial script | Apache-2.0 | fetched by setup; one unmodified source file is included as a test fixture (see [NOTICE](NOTICE)) |
-| Cosmos-Embed1, Qwen2.5-VL weights | Per model card; see [NOTICE](NOTICE) | no, downloaded on first use |
+| Cosmos-Embed1 weights | Per model card; see [NOTICE](NOTICE) | no, downloaded on first use |
 | GR00T-X-Embodiment-Sim dataset | CC BY 4.0, attribution NVIDIA; keep attribution on derived clips | no, seeded to your bucket |
 
 This is a Backblaze sample. It is not affiliated with, sponsored by, or endorsed by NVIDIA. NVIDIA, NeMo, Cosmos, Isaac, GR00T, and AIStore are trademarks of their respective owners.

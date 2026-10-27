@@ -3,7 +3,7 @@
 """Curate raw videos in B2 into clips and Cosmos-Embed1 embeddings through AIStore.
 
 Unlimited runs prefetch the input prefix into AIS first; bounded runs and --skip-prefetch
-read on demand through the cache. Curator runs unmodified and reads `s3://` via
+read on demand through the cache. Curator reads `s3://` via
 AWS_ENDPOINT_URL; the B2 GETs AIS made during that stage are reported on stderr. Curator
 1.3.0 writes clips locally, so output is uploaded through AIS to
 s3://$B2_BUCKET/<output-prefix>/<run-id>/.
@@ -23,12 +23,13 @@ import re
 import shlex
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
 import requests
 from botocore.exceptions import ClientError, EndpointConnectionError
+from prepare_model import MODEL_REVISION
 
 from aistore_b2_curation.artifacts import (
     MANIFEST,
@@ -52,6 +53,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # Installed by `make setup-curator` / `make setup` (see Makefile for pins and checksum).
 CURATOR_PYTHON = REPO_ROOT / ".venv-curator" / "bin" / "python"
 CURATOR_SCRIPT = REPO_ROOT / ".cache" / "curator" / "video_split_clip_example.py"
+CURATOR_ENTRYPOINT = REPO_ROOT / "scripts" / "curator_entrypoint.py"
 
 ENCODERS = ("h264_nvenc", "libvpx-vp9")
 # GA100/GH100-based GPUs have no NVENC; Curator documents libvpx-vp9 (CPU) for them.
@@ -66,7 +68,7 @@ def parse_args(argv: list[str] | None = None) -> tuple[argparse.Namespace, list[
     p.add_argument("--output-prefix", default="curated", help="B2 key prefix for results")
     p.add_argument(
         "--run-id",
-        default=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + uuid4().hex[:12],
+        default=datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ-") + uuid4().hex[:12],
     )
     p.add_argument("--work-dir", type=Path, default=REPO_ROOT / "work", help="local Curator output")
     p.add_argument(
@@ -75,14 +77,19 @@ def parse_args(argv: list[str] | None = None) -> tuple[argparse.Namespace, list[
     p.add_argument("--clip-seconds", type=float, default=5.0, help="fixed-stride clip length")
     p.add_argument("--encoder", choices=("auto", *ENCODERS), default="auto")
     p.add_argument("--video-limit", type=int, help="process at most N videos")
-    p.add_argument(
-        "--with-captions",
-        action="store_true",
-        help="also caption clips with Curator's default VLM (Qwen2.5-VL-7B; ~38 GB VRAM total)",
-    )
     p.add_argument("--skip-prefetch", action="store_true", help="let Curator cold-read via AIS")
     p.add_argument("--dry-run", action="store_true", help="print the Curator command and exit")
     args, extra = p.parse_known_args(argv)
+    unsupported = ("--with-captions", "--generate-captions", "--enhance-captions")
+    if any(
+        flag.startswith(arg.split("=", 1)[0])
+        for arg in extra
+        if arg.startswith("--")
+        for flag in unsupported
+    ) or any(arg.startswith(("--captioning-", "--enhance-caption")) for arg in extra):
+        p.error(
+            "captioning is not included; this sample produces clips and Cosmos-Embed1 embeddings"
+        )
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", args.run_id):
         p.error("--run-id must be a single identifier (letters, digits, underscores, hyphens)")
     if not math.isfinite(args.clip_seconds) or args.clip_seconds <= 0:
@@ -92,6 +99,7 @@ def parse_args(argv: list[str] | None = None) -> tuple[argparse.Namespace, list[
     reserved = (
         "--video-dir", "--output-path", "--output-clip-path", "--model-dir",
         "--transcode-encoder", "--fixed-stride-split-duration",
+        "--embedding-algorithm",
     )  # fmt: skip
     if any(
         flag.startswith(a.split("=", 1)[0])
@@ -99,7 +107,7 @@ def parse_args(argv: list[str] | None = None) -> tuple[argparse.Namespace, list[
         if a.startswith("--") and a != "--"
         for flag in reserved
     ):
-        p.error("input, output, model, encoder and clip duration must use the wrapper options")
+        p.error("input, output, model, encoder and clip duration are controlled by the wrapper")
     args.work_dir = args.work_dir.resolve()  # may be a symlink to local NVMe
     return args, extra
 
@@ -134,7 +142,7 @@ def build_command(
     """Curator video_split_clip_example.py invocation (flags verified against v1.3.0)."""
     cmd = [
         str(CURATOR_PYTHON),
-        str(CURATOR_SCRIPT),
+        str(CURATOR_ENTRYPOINT),
         "--video-dir", f"s3://{cfg.b2_bucket}/{args.input_prefix.strip('/')}",
         "--output-path", str(args.work_dir / args.run_id),
         "--model-dir", str(args.model_dir),
@@ -145,8 +153,6 @@ def build_command(
     ]  # fmt: skip
     if args.video_limit is not None:
         cmd += ["--video-limit", str(args.video_limit)]
-    if args.with_captions:
-        cmd += ["--generate-captions", "--captioning-algorithm", "qwen2.5"]
     return cmd + passthrough
 
 
@@ -232,6 +238,7 @@ def main(argv: list[str] | None = None) -> int:
             publish=True,
             provenance={
                 "curator_version": "1.3.0",
+                "cosmos_embed1_revision": MODEL_REVISION,
                 "input_prefix": args.input_prefix,
                 # Pins the exact input publication; None for an unmanifested prefix.
                 "input_manifest_sha256": input_manifest_sha256,

@@ -29,7 +29,7 @@ import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from itertools import islice
 from pathlib import Path
 from typing import Any
@@ -210,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
             r["b2_gets"], r["b2_get_bytes"] = after[0] - before[0], after[1] - before[1]
         results[mode] = r
 
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     report = {
         "timestamp": ts,
         "prefix": args.prefix,
