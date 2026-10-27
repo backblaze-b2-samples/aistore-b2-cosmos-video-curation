@@ -15,8 +15,8 @@ UV_RUN  := uv run --locked
 
 # NeMo Curator pin. The tutorial CLI is not shipped in the wheel, so fetch it from the
 # matching tag and verify its checksum.
-CURATOR_VERSION    := 1.3.0
-CURATOR_COMMIT     := 6b956ce8965820de1b638fedf6de0cbcf0cc46ba
+CURATOR_VERSION    := 1.4.0
+CURATOR_COMMIT     := 10fba1ea785863872ae6983b580ec6813e72cc79
 CURATOR_SCRIPT_URL := https://raw.githubusercontent.com/NVIDIA-NeMo/Curator/$(CURATOR_COMMIT)/tutorials/video/getting-started/video_split_clip_example.py
 CURATOR_SCRIPT_SHA := e6fec820b74911cd3b9a0eadc88be1c01b47dc06b49e90683a88fd584570307d
 CURATOR_SCRIPT     := .cache/curator/video_split_clip_example.py

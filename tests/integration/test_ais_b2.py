@@ -129,7 +129,7 @@ def test_multipart_put_writes_through_to_backend(cfg, ais, b2, tmp_path):
     assert b2.get_object(Bucket=cfg.b2_bucket, Key=key)["Body"].read() == src.read_bytes()
 
 
-# Replays the calls NeMo Curator 1.3.0 makes (ClientPartitioningStage + FSPath) and writes
+# Replays the calls NeMo Curator 1.4.0 makes (ClientPartitioningStage + FSPath) and writes
 # Curator-shaped output, so run_pipeline is exercised end to end without a GPU.
 FAKE_CURATOR = textwrap.dedent(
     """
