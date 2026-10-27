@@ -4,6 +4,7 @@ import argparse
 import ast
 import io
 import json
+import os
 import shlex
 from pathlib import Path
 
@@ -222,6 +223,29 @@ def test_complete_input_publication_is_curated(prepared_pipeline, inputs):
     inputs.objects = {"raw/a.mp4": 1, "raw2/other.mp4": 5}  # sibling prefix is not input
     assert run_pipeline.main(argv) == 0
     assert calls == ["media", "prefetch", "curator", "upload"]
+
+
+def test_curator_workers_keep_gpu_environment_under_uv(prepared_pipeline, monkeypatch):
+    argv, _, _ = prepared_pipeline
+    monkeypatch.setenv("VIRTUAL_ENV", "/wrapper/.venv")
+    monkeypatch.setenv("RAY_ENABLE_UV_RUN_RUNTIME_ENV", "1")
+    monkeypatch.setenv("PATH", "/wrapper/.venv/bin:/usr/bin")
+    monkeypatch.setenv("HF_TOKEN", "test-hf-token")
+    launched = []
+
+    def run(cmd, env):
+        launched.append((cmd, env))
+        return 0
+
+    monkeypatch.setattr(run_pipeline, "run_curator", run)
+    assert run_pipeline.main(argv) == 0
+    cmd, env = launched[0]
+    python = Path(cmd[0])
+    assert env["RAY_ENABLE_UV_RUN_RUNTIME_ENV"] == "0"
+    assert env["VIRTUAL_ENV"] == str(python.parent.parent)
+    assert env["PATH"].split(os.pathsep)[0] == str(python.parent)
+    assert env["HF_TOKEN"] == "test-hf-token"
+    assert "B2_KEY_ID" not in env and "B2_APP_KEY" not in env
 
 
 @pytest.mark.parametrize(

@@ -11,6 +11,7 @@ Steps marked **any machine** run on a CPU-only Linux or macOS host. Steps marked
 - [ ] [uv](https://docs.astral.sh/uv/)
 - [ ] **GPU host:** Linux x86_64, an NVIDIA GPU, and a CUDA 12-compatible driver and build toolkit. See [NVIDIA's video curation guide](https://docs.nvidia.com/nemo/curator/v26.07/get-started/video) for GPU sizing; embedding and captioning models have different VRAM needs.
 - [ ] **GPU host:** system FFmpeg and ffprobe 8.0+ with the selected encoder and its software decoder: `h264_nvenc` / `h264` for NVENC, or `libvpx-vp9` / `vp9` for CPU VP9. Check with `ffmpeg -version`, `ffprobe -version`, `ffmpeg -hide_banner -encoders`, and `ffmpeg -hide_banner -decoders`.
+- [ ] **GPU host, NVENC:** NVIDIA's video-encoding runtime library (`libnvidia-encode.so.1`) matching the installed driver. FFmpeg's encoder listing alone does not confirm runtime availability; `make run` exercises the encoder before accessing storage.
 
 ## Quickstart
 
@@ -57,7 +58,9 @@ flowchart LR
   O -->|publish last| M[_SUCCESS.json]
 ```
 
-AIS caches remote inputs and writes uploads through to B2. The wrapper (`scripts/run_pipeline.py`) runs Curator unmodified: botocore and s3fs pick up `AWS_ENDPOINT_URL`, so every Curator read goes through AIS. Curator 1.3.0 writes only to local paths, so output lands in `work/<run-id>/` and is then uploaded through AIS.
+AIS caches remote inputs and writes uploads through to B2. The wrapper (`scripts/run_pipeline.py`) launches the pinned Curator tutorial: botocore and s3fs pick up `AWS_ENDPOINT_URL`, so every Curator read goes through AIS. Curator 1.3.0 writes only to local paths, so output lands in `work/<run-id>/` and is then uploaded through AIS.
+
+`make setup-curator` applies a checksum-guarded compatibility fix to Curator 1.3.0: remote file-group IDs normalize `FSPath` values to strings before hashing. The original path objects remain intact for reads. Setup accepts only the known upstream file or its already patched form and fails on unexpected source. Ray workers use `.venv-curator`; the launcher's automatic uv environment propagation is disabled for the Curator subprocess.
 
 **Media preflight.** Before any storage access, the wrapper checks FFmpeg versions and codecs and performs a small in-memory encode with the selected encoder, which catches missing runtime NVENC support. `--encoder auto` selects NVENC, or CPU VP9 on recognized GPUs without NVENC (A100, H100); pass `--encoder libvpx-vp9` when hardware encoding is unavailable. `--dry-run` skips preflight and storage work.
 
@@ -93,6 +96,7 @@ make verify PREFIX=curated/<run-id> ARGS="--direct"  # B2's durable copy
 ```
 
 Verification streams every listed object, checks its size and SHA-256, then rereads the record to detect a concurrent republish.
+It prints its file count only after completion; large publications can take several minutes without intermediate output.
 
 ### Scope
 
@@ -170,6 +174,7 @@ Integration tests run against real B2 through a disposable AIS cluster under its
 | `work/<run-id> already exists; choose a new --run-id` | Pass a new `--run-id` or omit it for a generated one. |
 | `.venv-curator/... not found; run make setup-curator` | Run `make setup-curator` on the GPU host. |
 | `...; see README media prerequisites` | Install FFmpeg 8.0+ with the selected encoder, or pass `--encoder libvpx-vp9`. |
+| `Cannot load libnvidia-encode.so.1` | Install the NVIDIA video-encoding runtime library matching the installed driver and ensure it is visible to the dynamic linker. |
 | Nonzero `Curator stage: N B2 GETs` | Expected with `--video-limit` or `--skip-prefetch`, which read cold through AIS. |
 
 ## Pins
@@ -179,6 +184,7 @@ Integration tests run against real B2 through a disposable AIS cluster under its
 | NeMo Curator | `1.3.0` |
 | Curator tutorial script | commit `6b956ce8965820de1b638fedf6de0cbcf0cc46ba`, SHA-256 verified by `make setup` |
 | GPU Python environment | `deploy/curator/uv.lock`, Linux x86_64 / Python 3.12 |
+| Transformers | `4.57.6` in the GPU lock; constrained to `>=4.57.6,<5` for Cosmos-Embed1's custom model code |
 | CPU Python environment | `uv.lock` |
 | AIStore image | `aistorage/cluster-minimal:v5.1`, pinned by digest in `deploy/docker-compose.yml` |
 | AIStore Python SDK | `aistore==2.0.0`, moves with the image |
@@ -192,7 +198,7 @@ Model weights download on first use; record their revisions and hashes for a rep
 |---|---|---|
 | Sample code | Apache-2.0 ([LICENSE](LICENSE)) | yes |
 | `deploy/docker-compose.yml` | Adapted from AIStore (MIT); notice in [NOTICE](NOTICE) | yes |
-| NeMo Curator and its tutorial script | Apache-2.0 | no, fetched by `make setup` / `make setup-curator` |
+| NeMo Curator and its tutorial script | Apache-2.0 | fetched by setup; one unmodified source file is included as a test fixture (see [NOTICE](NOTICE)) |
 | Cosmos-Embed1, Qwen2.5-VL weights | Per model card; see [NOTICE](NOTICE) | no, downloaded on first use |
 | GR00T-X-Embodiment-Sim dataset | CC BY 4.0, attribution NVIDIA; keep attribution on derived clips | no, seeded to your bucket |
 

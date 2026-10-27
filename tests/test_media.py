@@ -129,7 +129,10 @@ def test_media_probe_timeout_is_actionable(monkeypatch, media_tools):
         media.check_media_tools("h264_nvenc")
 
 
-def test_runtime_probe_uses_components_in_curators_minimal_ffmpeg_build(monkeypatch, media_tools):
+@pytest.mark.parametrize("encoder", ["h264_nvenc", "libvpx-vp9"])
+def test_runtime_probe_uses_components_in_curators_minimal_ffmpeg_build(
+    monkeypatch, media_tools, encoder
+):
     run = media.subprocess.run
 
     def minimal_build(cmd, **kwargs):
@@ -138,10 +141,16 @@ def test_runtime_probe_uses_components_in_curators_minimal_ffmpeg_build(monkeypa
             assert formats == ["image2pipe", "mp4"]
             assert cmd[cmd.index("-c:v") + 1] == "rawvideo"
             assert cmd[cmd.index("-i") + 1] == "pipe:0"
-            assert len(kwargs["input"]) == 128 * 128 * 3 // 2
+            width, height = map(int, cmd[cmd.index("-video_size") + 1].split("x"))
+            if encoder == "h264_nvenc" and width < 145:
+                raise subprocess.CalledProcessError(
+                    1, cmd, stderr="Frame Dimension less than the minimum supported value"
+                )
+            assert width % 2 == height % 2 == 0
+            assert len(kwargs["input"]) == width * height * 3 // 2
             assert kwargs["text"] is False
             assert "lavfi" not in cmd and "null" not in cmd
         return run(cmd, **kwargs)
 
     monkeypatch.setattr(media.subprocess, "run", minimal_build)
-    media.check_media_tools("libvpx-vp9")
+    media.check_media_tools(encoder)

@@ -68,12 +68,14 @@ def check_media_tools(encoder: str) -> None:
     if not _has_codec(_output(ffmpeg, "-hide_banner", "-encoders"), encoder):
         raise MediaPrerequisiteError(f"ffmpeg requires the {encoder} encoder")
     # Curator's minimal FFmpeg build enables image2pipe/rawvideo/mp4, not lavfi or null muxing.
-    frame = bytes([16]) * (128 * 128) + bytes([128]) * (128 * 128 // 2)
+    # A 256x256 frame accommodates NVENC's minimum dimensions on newer GPUs.
+    width = height = 256
+    frame = bytes([16]) * (width * height) + bytes([128]) * (width * height // 2)
     _output(
         ffmpeg,
         "-hide_banner", "-loglevel", "error",
         "-f", "image2pipe", "-c:v", "rawvideo",
-        "-pixel_format", "yuv420p", "-video_size", "128x128", "-framerate", "1",
+        "-pixel_format", "yuv420p", "-video_size", f"{width}x{height}", "-framerate", "1",
         "-i", "pipe:0",
         "-frames:v", "1", "-an", "-c:v", encoder, "-pix_fmt", "yuv420p",
         "-threads", "1", "-f", "mp4", "-movflags", "frag_keyframe+empty_moov", "pipe:1",

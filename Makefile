@@ -38,6 +38,7 @@ $(CURATOR_SCRIPT):
 setup-curator: setup ## GPU host (Linux x86_64, CUDA 12): NeMo Curator in .venv-curator
 	@test "$$(uname -s)-$$(uname -m)" = Linux-x86_64 || { echo "Curator requires Linux x86_64 + CUDA 12" >&2; exit 1; }
 	UV_PROJECT_ENVIRONMENT=$(CURDIR)/.venv-curator uv sync --locked --project deploy/curator --python 3.12
+	.venv-curator/bin/python scripts/patch_curator.py
 
 up: ## Start AIS on 127.0.0.1 and attach s3://$B2_BUCKET
 	$(LOAD_ENV) $(COMPOSE) up -d --wait
