@@ -22,7 +22,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "pytest==9.1.1",
+    "pytest==9.2.0",
     "pytest-timeout==2.4.0",
     "ruff==0.17.2",
     "s3fs>=2024.12.0",  # integration tests replay NeMo Curator's fsspec/s3fs read path
